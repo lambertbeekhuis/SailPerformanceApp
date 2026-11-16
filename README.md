@@ -4,25 +4,50 @@ iPhone-first Flutter app that reads NMEA 0183 sailing data (file replay today, l
 
 ## Run the **app** in the iOS Simulator
 
-Booting the Simulator alone only shows the home screen. You still need Flutter to install and launch SailPerformance:
+Booting the Simulator alone only shows the home screen. You still need Flutter to install and launch SailPerformance.
+
+### Working recipe (this Mac)
+
+Default `xcode-select` points at **Xcode 26.6** (iOS **26.5** SDK), but the matching **iOS 26.5 Simulator** runtime is not installed yet (only ≤26.3). Until that runtime is installed, use **Xcode 16.4** + an **iOS 18.6** simulator:
 
 ```bash
 cd ~/Sites/SailPerformanceApp
 
-# Optional: boot a simulator first
-open -a Simulator
-# or: xcrun simctl boot "iPhone 16"
+# Prefer Xcode 16.4 for Flutter until iOS 26.5 runtime is installed
+export DEVELOPER_DIR=/Applications/Xcode16.app/Contents/Developer
 
-# This installs and opens the app UI (required)
-flutter run
-# or pick a device: flutter devices && flutter run -d <device-id>
+# Boot an iOS 18.6 simulator (iPhone 16e works)
+open -a Simulator
+xcrun simctl boot "iPhone 16e" 2>/dev/null || true
+# If several iPhone 16e exist, pick the iOS 18.6 one explicitly:
+#   flutter devices
+#   flutter run -d 3C70161C-14F1-4F3D-B855-E529F278072E
+
+flutter run -d 3C70161C-14F1-4F3D-B855-E529F278072E
 ```
 
-From Xcode: open `ios/Runner.xcworkspace`, select the **Runner** scheme and a simulator, then Run.
+Optional one-time system switch (needs your Mac password):
+
+```bash
+sudo xcode-select -s /Applications/Xcode16.app/Contents/Developer
+flutter run -d 3C70161C-14F1-4F3D-B855-E529F278072E
+```
+
+### Restore Xcode 26.6 later (after iOS 26.5 runtime)
+
+```bash
+# Non-interactive (preferred; ~8.5 GB — use a stable network, not a flaky hotspot):
+xcodebuild -downloadPlatform iOS
+
+# Or interactive: Xcode → Settings → Platforms / Components → download iOS 26.5
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+flutter devices   # pick a device on iOS 26.5 (or matching) runtime
+flutter run -d <device-id>
+```
+
+From Xcode 16: open `ios/Runner.xcworkspace`, select **Runner** + an iOS 18.x simulator, then Run.
 
 `open -a Simulator` by itself does **not** launch SailPerformance.
-
-If `flutter run` fails with “No Xcode build settings” / no Simulator destination, Xcode’s SDK (e.g. iOS 26.5) may be newer than the installed Simulator runtimes. Install the matching platform in **Xcode → Settings → Components** (or `xcodebuild -downloadPlatform iOS`), then retry `flutter run`.
 
 ## Debug data source
 
