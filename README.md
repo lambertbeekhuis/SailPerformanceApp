@@ -64,10 +64,20 @@ flutter analyze
 flutter test
 ```
 
+## Dashboard instruments
+
+Large glanceable tiles (stale values grey out after 5 s):
+
+1. **AWA** — signed apparent wind (Port / Stbd)
+2. **Speed** — STW, falling back to SOG (label is always “Speed”)
+3. **AWS**
+4. **Heading** or **COG** — prefers Heading when present; `courseDisplayModeProvider` is ready for a later settings toggle
+5. **TWD** + tack-aware **Lift +x° / Header −x°** vs a ~12 min rolling reference (or **Set ref** to pin now)
+
 ## Layout
 
-- `lib/nmea/` — checksum, parser, sailing snapshot (STW/SOG, AWS/AWA, computed TWS/TWA)
+- `lib/nmea/` — checksum, parser, sailing snapshot, TWD / lift-header math, course display
 - `lib/data/` — `NmeaDataSource` interface, `FileNmeaSource`, `LiveTcpNmeaSource`
-- `lib/features/dashboard/` — large Speed + Wind UI, screen awake via `wakelock_plus`
+- `lib/features/dashboard/` — instrument grid UI, screen awake via `wakelock_plus`
 - `assets/nmea/sample_sailing.nmea` — synthetic log with valid checksums (MWV, VHW, VTG, RMC)
 - `assets/branding/app_icon_1024.png` — AppIcon source (also wired into iOS/Android launchers)

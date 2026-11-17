@@ -20,7 +20,11 @@ void main() {
     expect(find.text('SailPerformance'), findsWidgets);
     expect(find.text('File'), findsWidgets);
     expect(find.text('Live'), findsWidgets);
+    expect(find.text('AWA'), findsOneWidget);
+    expect(find.text('Speed'), findsOneWidget);
     expect(find.text('AWS'), findsOneWidget);
+    expect(find.text('TWD'), findsOneWidget);
+    expect(find.byTooltip('Set reference now'), findsOneWidget);
     expect(
       find.textContaining('Aid only'),
       findsOneWidget,

@@ -5,10 +5,11 @@ import 'package:material_ui/material_ui.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../data/nmea_data_source.dart';
+import '../../nmea/course_display.dart';
 import '../../nmea/sailing_snapshot.dart';
 import '../../providers/nmea_providers.dart';
 
-/// Minimal live dashboard: large Speed + Wind, File/Live switch.
+/// Live dashboard: AWA, Speed, AWS, Heading/COG, TWD + lift/header.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -17,15 +18,22 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  Timer? _staleTicker;
+
   @override
   void initState() {
     super.initState();
     // Keep the screen awake while viewing live data (requirements §2).
     unawaited(WakelockPlus.enable());
+    // Rebuild periodically so stale values grey out without new NMEA.
+    _staleTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _staleTicker?.cancel();
     unawaited(WakelockPlus.disable());
     super.dispose();
   }
@@ -35,8 +43,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final snapshot = ref.watch(sailingSnapshotProvider);
     final status = ref.watch(nmeaSourceStatusProvider);
     final kind = ref.watch(nmeaSourceKindProvider);
+    final course = ref.watch(courseDisplayProvider);
+    final pinned = ref.watch(windReferencePinnedProvider);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final now = DateTime.now();
 
     return Scaffold(
       backgroundColor: scheme.surface,
@@ -73,34 +84,69 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Column(
             crossAxisAlignment: .stretch,
             children: [
               _StatusBanner(status: status),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final wide = constraints.maxWidth > 560;
-                    final speed = _SpeedPanel(snapshot: snapshot);
-                    final wind = _WindPanel(snapshot: snapshot);
+                    // Need room for five glanceable columns (simulator / tablet).
+                    final wide = constraints.maxWidth >= 900;
+                    final tall = constraints.maxHeight >= 520;
+                    final tiles = _buildTiles(
+                      snapshot: snapshot,
+                      course: course,
+                      now: now,
+                      pinned: pinned,
+                      onSetReference: () {
+                        ref
+                            .read(sailingSnapshotProvider.notifier)
+                            .setWindReferenceNow();
+                      },
+                    );
                     if (wide) {
                       return Row(
                         crossAxisAlignment: .stretch,
                         children: [
-                          Expanded(child: speed),
-                          const SizedBox(width: 16),
-                          Expanded(child: wind),
+                          for (var i = 0; i < tiles.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 12),
+                            Expanded(child: tiles[i]),
+                          ],
                         ],
                       );
                     }
+                    // Portrait: 2×2 grid + full-width TWD row.
                     return Column(
                       crossAxisAlignment: .stretch,
                       children: [
-                        Expanded(child: speed),
-                        const SizedBox(height: 16),
-                        Expanded(child: wind),
+                        Expanded(
+                          flex: tall ? 3 : 2,
+                          child: Row(
+                            crossAxisAlignment: .stretch,
+                            children: [
+                              Expanded(child: tiles[0]),
+                              const SizedBox(width: 12),
+                              Expanded(child: tiles[1]),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          flex: tall ? 3 : 2,
+                          child: Row(
+                            crossAxisAlignment: .stretch,
+                            children: [
+                              Expanded(child: tiles[2]),
+                              const SizedBox(width: 12),
+                              Expanded(child: tiles[3]),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(flex: tall ? 2 : 2, child: tiles[4]),
                       ],
                     );
                   },
@@ -119,6 +165,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildTiles({
+    required SailingSnapshot snapshot,
+    required CourseDisplay course,
+    required DateTime now,
+    required bool pinned,
+    required VoidCallback onSetReference,
+  }) {
+    final awa = snapshot.awaSigned;
+    String? awaSide;
+    if (awa != null) {
+      awaSide = awa >= 0 ? 'Stbd' : 'Port';
+    }
+
+    final speed = snapshot.preferredSpeed;
+    final speedHint = snapshot.stw != null
+        ? (snapshot.sog != null
+            ? 'STW · SOG ${snapshot.sog!.value.toStringAsFixed(1)}'
+            : 'STW')
+        : (snapshot.sog != null ? 'SOG fallback' : null);
+
+    return [
+      _MetricTile(
+        title: 'AWA',
+        value: awa?.abs(),
+        unit: '°',
+        timed: snapshot.awaDegreesFromBow,
+        now: now,
+        subtitle: awaSide,
+        fractionDigits: 0,
+      ),
+      _MetricTile(
+        title: 'Speed',
+        value: speed?.value,
+        unit: 'kn',
+        timed: speed,
+        now: now,
+        subtitle: speedHint,
+        fractionDigits: 1,
+      ),
+      _MetricTile(
+        title: 'AWS',
+        value: snapshot.aws?.value,
+        unit: 'kn',
+        timed: snapshot.aws,
+        now: now,
+        fractionDigits: 1,
+      ),
+      _MetricTile(
+        title: course.sourceLabel,
+        value: course.degrees,
+        unit: '°',
+        timed: course.value,
+        now: now,
+        subtitle: course.mode == CourseDisplayMode.preferHeading
+            ? (course.sourceLabel == 'Heading'
+                ? 'prefers Heading'
+                : 'COG (no Heading)')
+            : null,
+        fractionDigits: 0,
+      ),
+      _TwdTile(
+        snapshot: snapshot,
+        now: now,
+        pinned: pinned,
+        onSetReference: onSetReference,
+      ),
+    ];
   }
 }
 
@@ -145,7 +260,7 @@ class _StatusBanner extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           children: [
             Icon(
@@ -169,83 +284,32 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
-class _SpeedPanel extends StatelessWidget {
-  const _SpeedPanel({required this.snapshot});
-
-  final SailingSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final preferred = snapshot.preferredSpeed;
-    final label = snapshot.preferredSpeedLabel;
-    final subtitle = snapshot.stw != null && snapshot.sog != null
-        ? 'SOG ${snapshot.sog!.value.toStringAsFixed(1)} kn'
-        : null;
-
-    return _MetricPanel(
-      title: label,
-      value: preferred?.value,
-      unit: 'kn',
-      subtitle: subtitle,
-    );
-  }
-}
-
-class _WindPanel extends StatelessWidget {
-  const _WindPanel({required this.snapshot});
-
-  final SailingSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final aws = snapshot.aws?.value;
-    final awa = snapshot.awaSigned;
-    final tws = snapshot.tws?.value;
-    final twa = snapshot.twaSigned?.value;
-
-    String? awaText;
-    if (awa != null) {
-      final side = awa >= 0 ? 'S' : 'P';
-      awaText = 'AWA ${awa.abs().toStringAsFixed(0)}° $side';
-    }
-
-    String? trueText;
-    if (tws != null && twa != null) {
-      final side = twa >= 0 ? 'S' : 'P';
-      trueText =
-          'TWS ${tws.toStringAsFixed(1)}  TWA ${twa.abs().toStringAsFixed(0)}° $side';
-    }
-
-    return _MetricPanel(
-      title: 'AWS',
-      value: aws,
-      unit: 'kn',
-      subtitle: [
-        ?awaText,
-        ?trueText,
-      ].join(' · '),
-    );
-  }
-}
-
-class _MetricPanel extends StatelessWidget {
-  const _MetricPanel({
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
     required this.title,
     required this.value,
     required this.unit,
+    required this.now,
+    this.timed,
     this.subtitle,
+    this.fractionDigits = 1,
   });
 
   final String title;
   final double? value;
   final String unit;
+  final DateTime now;
+  final TimedValue? timed;
   final String? subtitle;
+  final int fractionDigits;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final hasValue = value != null;
+    final stale = timed == null ||
+        timed!.isStale(now, kDefaultStaleTimeout);
+    final hasValue = value != null && !stale;
     final valueColor =
         hasValue ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
 
@@ -255,7 +319,7 @@ class _MetricPanel extends StatelessWidget {
         borderRadius: .circular(16),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           crossAxisAlignment: .start,
           children: [
@@ -263,7 +327,8 @@ class _MetricPanel extends StatelessWidget {
               title,
               style: theme.textTheme.titleMedium?.copyWith(
                 color: scheme.onSurfaceVariant,
-                letterSpacing: 1.2,
+                letterSpacing: 1.1,
+                fontWeight: .w600,
               ),
             ),
             const Spacer(),
@@ -275,17 +340,19 @@ class _MetricPanel extends StatelessWidget {
                 textBaseline: .alphabetic,
                 children: [
                   Text(
-                    hasValue ? value!.toStringAsFixed(1) : '—',
-                    style: theme.textTheme.displayLarge?.copyWith(
+                    hasValue
+                        ? value!.toStringAsFixed(fractionDigits)
+                        : '—',
+                    style: theme.textTheme.displayMedium?.copyWith(
                       color: valueColor,
                       fontWeight: .w600,
                       height: 1.0,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text(
                     unit,
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    style: theme.textTheme.titleLarge?.copyWith(
                       color: valueColor.withValues(alpha: 0.7),
                     ),
                   ),
@@ -293,10 +360,10 @@ class _MetricPanel extends StatelessWidget {
               ),
             ),
             if (subtitle != null && subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 subtitle!,
-                style: theme.textTheme.bodyLarge?.copyWith(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: scheme.onSurfaceVariant,
                 ),
               ),
@@ -306,5 +373,138 @@ class _MetricPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _TwdTile extends StatelessWidget {
+  const _TwdTile({
+    required this.snapshot,
+    required this.now,
+    required this.pinned,
+    required this.onSetReference,
+  });
+
+  final SailingSnapshot snapshot;
+  final DateTime now;
+  final bool pinned;
+  final VoidCallback onSetReference;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final timed = snapshot.twd;
+    final stale =
+        timed == null || timed.isStale(now, kDefaultStaleTimeout);
+    final hasValue = timed != null && !stale;
+    final valueColor =
+        hasValue ? scheme.onSurface : scheme.onSurface.withValues(alpha: 0.35);
+    final lift = snapshot.liftHeaderLabel;
+    final liftColor = _liftColor(scheme, lift, hasValue);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: .circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: .start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'TWD',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      letterSpacing: 1.1,
+                      fontWeight: .w600,
+                    ),
+                    overflow: .ellipsis,
+                  ),
+                ),
+                IconButton(
+                  onPressed: onSetReference,
+                  tooltip: pinned
+                      ? 'Reference pinned — tap to re-pin now'
+                      : 'Set reference now',
+                  visualDensity: .compact,
+                  iconSize: 20,
+                  padding: .zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  icon: Icon(
+                    pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            FittedBox(
+              fit: .scaleDown,
+              alignment: .centerLeft,
+              child: Row(
+                crossAxisAlignment: .baseline,
+                textBaseline: .alphabetic,
+                children: [
+                  Text(
+                    hasValue
+                        ? timed.value.toStringAsFixed(0)
+                        : '—',
+                    style: theme.textTheme.displayMedium?.copyWith(
+                      color: valueColor,
+                      fontWeight: .w600,
+                      height: 1.0,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '°',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: valueColor.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  if (lift != null && hasValue) ...[
+                    const SizedBox(width: 16),
+                    Text(
+                      lift,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: liftColor,
+                        fontWeight: .w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              pinned ? 'Pinned reference' : 'Rolling ~12 min reference',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _liftColor(ColorScheme scheme, String? lift, bool hasValue) {
+    if (!hasValue || lift == null) {
+      return scheme.onSurface.withValues(alpha: 0.35);
+    }
+    if (lift.startsWith('Lift')) {
+      return const Color(0xFF1B7F4A);
+    }
+    if (lift.startsWith('Header')) {
+      return const Color(0xFFB3261E);
+    }
+    return scheme.onSurfaceVariant;
   }
 }

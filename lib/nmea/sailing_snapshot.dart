@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'wind_math.dart';
+
 /// One instrument value with the time it was last updated.
 class TimedValue {
   const TimedValue(this.value, this.updatedAt);
@@ -10,6 +12,9 @@ class TimedValue {
   bool isStale(DateTime now, Duration timeout) =>
       now.difference(updatedAt) > timeout;
 }
+
+/// Default stale timeout for dashboard grey-out.
+const Duration kDefaultStaleTimeout = Duration(seconds: 5);
 
 /// Latest sailing values derived from the NMEA feed.
 class SailingSnapshot {
@@ -22,6 +27,8 @@ class SailingSnapshot {
     this.cog,
     this.tws,
     this.twaSigned,
+    this.twd,
+    this.liftHeaderLabel,
   });
 
   final TimedValue? stw;
@@ -37,14 +44,17 @@ class SailingSnapshot {
   /// Signed TWA: positive = starboard, negative = port.
   final TimedValue? twaSigned;
 
+  /// True wind direction (degrees true), water-referenced.
+  final TimedValue? twd;
+
+  /// Latest lift/header label, e.g. `Lift +3°` / `Header −2°`.
+  final String? liftHeaderLabel;
+
   /// Preferred boat speed: STW when present, otherwise SOG.
   TimedValue? get preferredSpeed => stw ?? sog;
 
-  String get preferredSpeedLabel {
-    if (stw != null) return 'STW';
-    if (sog != null) return 'SOG';
-    return 'Speed';
-  }
+  /// Dashboard always labels this field "Speed" (value is STW, else SOG).
+  String get preferredSpeedLabel => 'Speed';
 
   /// Signed AWA: positive = starboard, negative = port.
   double? get awaSigned {
@@ -62,6 +72,9 @@ class SailingSnapshot {
     TimedValue? cog,
     TimedValue? tws,
     TimedValue? twaSigned,
+    TimedValue? twd,
+    String? liftHeaderLabel,
+    bool clearLiftHeaderLabel = false,
   }) {
     return SailingSnapshot(
       stw: stw ?? this.stw,
@@ -72,10 +85,15 @@ class SailingSnapshot {
       cog: cog ?? this.cog,
       tws: tws ?? this.tws,
       twaSigned: twaSigned ?? this.twaSigned,
+      twd: twd ?? this.twd,
+      liftHeaderLabel: clearLiftHeaderLabel
+          ? null
+          : (liftHeaderLabel ?? this.liftHeaderLabel),
     );
   }
 
   /// Water-referenced true wind from apparent wind + STW (requirements §5).
+  /// Also computes TWD when heading is available: `(heading + TWA) mod 360`.
   SailingSnapshot withComputedTrueWind({DateTime? at}) {
     final awsValue = aws?.value;
     final awa = awaSigned;
@@ -91,9 +109,20 @@ class SailingSnapshot {
     final computedTws = math.sqrt(twX * twX + twY * twY);
     final computedTwa = math.atan2(twY, twX) * 180.0 / math.pi;
     final stamp = at ?? DateTime.now();
+
+    TimedValue? computedTwd;
+    final heading = headingTrue?.value;
+    if (heading != null) {
+      computedTwd = TimedValue(
+        computeTwd(headingDegrees: heading, twaSignedDegrees: computedTwa),
+        stamp,
+      );
+    }
+
     return copyWith(
       tws: TimedValue(computedTws, stamp),
       twaSigned: TimedValue(computedTwa, stamp),
+      twd: computedTwd,
     );
   }
 }

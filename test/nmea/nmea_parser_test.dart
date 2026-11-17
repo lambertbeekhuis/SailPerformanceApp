@@ -51,10 +51,13 @@ void main() {
       expect(snap.aws?.value, closeTo(11.5, 1e-9));
       expect(snap.awaSigned, closeTo(32.0, 1e-9));
       expect(snap.stw?.value, closeTo(6.0, 1e-9));
-      expect(snap.preferredSpeedLabel, 'STW');
+      expect(snap.preferredSpeedLabel, 'Speed');
       expect(snap.tws, isNotNull);
       expect(snap.twaSigned, isNotNull);
       expect(snap.tws!.value, greaterThan(0));
+      expect(snap.twd, isNotNull);
+      // heading 45 + TWA ≈ TWD
+      expect(snap.twd!.value, closeTo(45 + snap.twaSigned!.value, 1e-6));
     });
 
     test('falls back to SOG from VTG when STW missing', () {
@@ -66,7 +69,7 @@ void main() {
         isTrue,
       );
       expect(parser.snapshot.sog?.value, closeTo(5.82, 1e-9));
-      expect(parser.snapshot.preferredSpeedLabel, 'SOG');
+      expect(parser.snapshot.preferredSpeedLabel, 'Speed');
       expect(parser.snapshot.preferredSpeed?.value, closeTo(5.82, 1e-9));
     });
 

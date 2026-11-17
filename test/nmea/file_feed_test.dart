@@ -21,7 +21,7 @@ void main() {
     expect(parser.snapshot.stw, isNotNull);
     expect(parser.snapshot.aws, isNotNull);
     expect(parser.snapshot.awaDegreesFromBow, isNotNull);
-    expect(parser.snapshot.preferredSpeedLabel, 'STW');
+    expect(parser.snapshot.preferredSpeedLabel, 'Speed');
     expect(parser.snapshot.tws, isNotNull);
   });
 }
