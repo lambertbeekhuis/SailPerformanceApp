@@ -9,7 +9,7 @@ import '../../nmea/course_display.dart';
 import '../../nmea/sailing_snapshot.dart';
 import '../../providers/nmea_providers.dart';
 
-/// Live dashboard: AWA, Speed, AWS, Heading/COG, TWD + lift/header.
+/// Live dashboard: Speed, AWA, AWS(+TWS), Heading/COG, TWD + lift/header.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -84,18 +84,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Column(
             crossAxisAlignment: .stretch,
             children: [
               _StatusBanner(status: status),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Need room for five glanceable columns (simulator / tablet).
-                    final wide = constraints.maxWidth >= 900;
-                    final tall = constraints.maxHeight >= 520;
+                child: Builder(
+                  builder: (context) {
                     final tiles = _buildTiles(
                       snapshot: snapshot,
                       course: course,
@@ -107,52 +104,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             .setWindReferenceNow();
                       },
                     );
-                    if (wide) {
-                      return Row(
-                        crossAxisAlignment: .stretch,
-                        children: [
-                          for (var i = 0; i < tiles.length; i++) ...[
-                            if (i > 0) const SizedBox(width: 12),
-                            Expanded(child: tiles[i]),
-                          ],
-                        ],
-                      );
-                    }
-                    // Portrait: 2×2 grid + full-width TWD row.
                     return Column(
                       crossAxisAlignment: .stretch,
                       children: [
-                        Expanded(
-                          flex: tall ? 3 : 2,
-                          child: Row(
-                            crossAxisAlignment: .stretch,
-                            children: [
-                              Expanded(child: tiles[0]),
-                              const SizedBox(width: 12),
-                              Expanded(child: tiles[1]),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Expanded(
-                          flex: tall ? 3 : 2,
-                          child: Row(
-                            crossAxisAlignment: .stretch,
-                            children: [
-                              Expanded(child: tiles[2]),
-                              const SizedBox(width: 12),
-                              Expanded(child: tiles[3]),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Expanded(flex: tall ? 2 : 2, child: tiles[4]),
+                        for (var i = 0; i < tiles.length; i++) ...[
+                          if (i > 0) const SizedBox(height: 8),
+                          Expanded(child: tiles[i]),
+                        ],
                       ],
                     );
                   },
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 'Aid only — not a navigation instrument.',
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -187,16 +151,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             : 'STW')
         : (snapshot.sog != null ? 'SOG fallback' : null);
 
+    final tws = snapshot.tws;
+    final twsStale =
+        tws == null || tws.isStale(now, kDefaultStaleTimeout);
+    final twsLabel = (!twsStale)
+        ? 'TWS ${tws.value.toStringAsFixed(1)} kn'
+        : null;
+
     return [
-      _MetricTile(
-        title: 'AWA',
-        value: awa?.abs(),
-        unit: '°',
-        timed: snapshot.awaDegreesFromBow,
-        now: now,
-        subtitle: awaSide,
-        fractionDigits: 0,
-      ),
       _MetricTile(
         title: 'Speed',
         value: speed?.value,
@@ -207,11 +169,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         fractionDigits: 1,
       ),
       _MetricTile(
+        title: 'AWA',
+        value: awa?.abs(),
+        unit: '°',
+        timed: snapshot.awaDegreesFromBow,
+        now: now,
+        subtitle: awaSide,
+        fractionDigits: 0,
+      ),
+      _MetricTile(
         title: 'AWS',
         value: snapshot.aws?.value,
         unit: 'kn',
         timed: snapshot.aws,
         now: now,
+        subtitle: twsLabel,
         fractionDigits: 1,
       ),
       _MetricTile(
@@ -260,7 +232,7 @@ class _StatusBanner extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(bottom: 6),
         child: Row(
           children: [
             Icon(
@@ -284,6 +256,7 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
+/// Full-width horizontal instrument band: label left, large value right.
 class _MetricTile extends StatelessWidget {
   const _MetricTile({
     required this.title,
@@ -316,59 +289,72 @@ class _MetricTile extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: .circular(16),
+        borderRadius: .circular(14),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: .start,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          crossAxisAlignment: .center,
           children: [
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 1.1,
-                fontWeight: .w600,
-              ),
-            ),
-            const Spacer(),
-            FittedBox(
-              fit: .scaleDown,
-              alignment: .centerLeft,
-              child: Row(
-                crossAxisAlignment: .baseline,
-                textBaseline: .alphabetic,
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: .start,
+                mainAxisAlignment: .center,
                 children: [
                   Text(
-                    hasValue
-                        ? value!.toStringAsFixed(fractionDigits)
-                        : '—',
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      color: valueColor,
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      letterSpacing: 1.1,
                       fontWeight: .w600,
-                      height: 1.0,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    unit,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: valueColor.withValues(alpha: 0.7),
+                  if (subtitle != null && subtitle!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: .ellipsis,
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
-            if (subtitle != null && subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                subtitle!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
+            Expanded(
+              flex: 3,
+              child: FittedBox(
+                fit: .scaleDown,
+                alignment: .centerRight,
+                child: Row(
+                  mainAxisAlignment: .end,
+                  crossAxisAlignment: .baseline,
+                  textBaseline: .alphabetic,
+                  children: [
+                    Text(
+                      hasValue
+                          ? value!.toStringAsFixed(fractionDigits)
+                          : '—',
+                      style: theme.textTheme.displayLarge?.copyWith(
+                        color: valueColor,
+                        fontWeight: .w600,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      unit,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: valueColor.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-            const Spacer(),
+            ),
           ],
         ),
       ),
@@ -405,90 +391,102 @@ class _TwdTile extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: .circular(16),
+        borderRadius: .circular(14),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: .start,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          crossAxisAlignment: .center,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'TWD',
-                    style: theme.textTheme.titleMedium?.copyWith(
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: .start,
+                mainAxisAlignment: .center,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'TWD',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            letterSpacing: 1.1,
+                            fontWeight: .w600,
+                          ),
+                          overflow: .ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onSetReference,
+                        tooltip: pinned
+                            ? 'Reference pinned — tap to re-pin now'
+                            : 'Set reference now',
+                        visualDensity: .compact,
+                        iconSize: 20,
+                        padding: .zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        icon: Icon(
+                          pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    pinned ? 'Pinned reference' : 'Rolling ~12 min reference',
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: scheme.onSurfaceVariant,
-                      letterSpacing: 1.1,
-                      fontWeight: .w600,
                     ),
+                    maxLines: 1,
                     overflow: .ellipsis,
                   ),
-                ),
-                IconButton(
-                  onPressed: onSetReference,
-                  tooltip: pinned
-                      ? 'Reference pinned — tap to re-pin now'
-                      : 'Set reference now',
-                  visualDensity: .compact,
-                  iconSize: 20,
-                  padding: .zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  icon: Icon(
-                    pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            FittedBox(
-              fit: .scaleDown,
-              alignment: .centerLeft,
-              child: Row(
-                crossAxisAlignment: .baseline,
-                textBaseline: .alphabetic,
-                children: [
-                  Text(
-                    hasValue
-                        ? timed.value.toStringAsFixed(0)
-                        : '—',
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      color: valueColor,
-                      fontWeight: .w600,
-                      height: 1.0,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '°',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: valueColor.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  if (lift != null && hasValue) ...[
-                    const SizedBox(width: 16),
-                    Text(
-                      lift,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: liftColor,
-                        fontWeight: .w600,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              pinned ? 'Pinned reference' : 'Rolling ~12 min reference',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onSurfaceVariant,
+            Expanded(
+              flex: 3,
+              child: FittedBox(
+                fit: .scaleDown,
+                alignment: .centerRight,
+                child: Row(
+                  mainAxisAlignment: .end,
+                  crossAxisAlignment: .baseline,
+                  textBaseline: .alphabetic,
+                  children: [
+                    Text(
+                      hasValue
+                          ? timed.value.toStringAsFixed(0)
+                          : '—',
+                      style: theme.textTheme.displayLarge?.copyWith(
+                        color: valueColor,
+                        fontWeight: .w600,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '°',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: valueColor.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    if (lift != null && hasValue) ...[
+                      const SizedBox(width: 12),
+                      Text(
+                        lift,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          color: liftColor,
+                          fontWeight: .w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
-            const Spacer(),
           ],
         ),
       ),
