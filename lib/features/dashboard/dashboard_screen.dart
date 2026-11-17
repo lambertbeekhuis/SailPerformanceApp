@@ -256,7 +256,7 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
-/// Full-width horizontal instrument band: label left, large value right.
+/// Full-width instrument tile: label top-right, primary value centered.
 class _MetricTile extends StatelessWidget {
   const _MetricTile({
     required this.title,
@@ -293,66 +293,69 @@ class _MetricTile extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          crossAxisAlignment: .center,
+        child: Stack(
           children: [
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: .start,
-                mainAxisAlignment: .center,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                      letterSpacing: 1.1,
-                      fontWeight: .w600,
-                    ),
-                  ),
-                  if (subtitle != null && subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: .ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 3,
+            Center(
               child: FittedBox(
                 fit: .scaleDown,
-                alignment: .centerRight,
-                child: Row(
-                  mainAxisAlignment: .end,
-                  crossAxisAlignment: .baseline,
-                  textBaseline: .alphabetic,
+                alignment: .center,
+                child: Column(
+                  mainAxisSize: .min,
+                  crossAxisAlignment: .start,
                   children: [
-                    Text(
-                      hasValue
-                          ? value!.toStringAsFixed(fractionDigits)
-                          : '—',
-                      style: theme.textTheme.displayLarge?.copyWith(
-                        color: valueColor,
-                        fontWeight: .w600,
-                        height: 1.0,
-                      ),
+                    Row(
+                      mainAxisSize: .min,
+                      crossAxisAlignment: .baseline,
+                      textBaseline: .alphabetic,
+                      children: [
+                        Text(
+                          hasValue
+                              ? value!.toStringAsFixed(fractionDigits)
+                              : '—',
+                          style: theme.textTheme.displayLarge?.copyWith(
+                            color: valueColor,
+                            fontWeight: .w600,
+                            height: 1.0,
+                          ),
+                          textAlign: .left,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          unit,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: valueColor.withValues(alpha: 0.7),
+                          ),
+                          textAlign: .left,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      unit,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: valueColor.withValues(alpha: 0.7),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        textAlign: .left,
+                        maxLines: 1,
+                        overflow: .ellipsis,
                       ),
-                    ),
+                    ],
                   ],
                 ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  letterSpacing: 1.1,
+                  fontWeight: .w600,
+                ),
+                textAlign: .right,
               ),
             ),
           ],
@@ -395,96 +398,101 @@ class _TwdTile extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          crossAxisAlignment: .center,
+        child: Stack(
           children: [
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: .start,
-                mainAxisAlignment: .center,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'TWD',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            letterSpacing: 1.1,
-                            fontWeight: .w600,
-                          ),
-                          overflow: .ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: onSetReference,
-                        tooltip: pinned
-                            ? 'Reference pinned — tap to re-pin now'
-                            : 'Set reference now',
-                        visualDensity: .compact,
-                        iconSize: 20,
-                        padding: .zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        icon: Icon(
-                          pinned ? Icons.push_pin : Icons.push_pin_outlined,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    pinned ? 'Pinned reference' : 'Rolling ~12 min reference',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: .ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 3,
+            Center(
               child: FittedBox(
                 fit: .scaleDown,
-                alignment: .centerRight,
-                child: Row(
-                  mainAxisAlignment: .end,
-                  crossAxisAlignment: .baseline,
-                  textBaseline: .alphabetic,
+                alignment: .center,
+                child: Column(
+                  mainAxisSize: .min,
+                  crossAxisAlignment: .start,
                   children: [
-                    Text(
-                      hasValue
-                          ? timed.value.toStringAsFixed(0)
-                          : '—',
-                      style: theme.textTheme.displayLarge?.copyWith(
-                        color: valueColor,
-                        fontWeight: .w600,
-                        height: 1.0,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '°',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: valueColor.withValues(alpha: 0.7),
-                      ),
-                    ),
-                    if (lift != null && hasValue) ...[
-                      const SizedBox(width: 12),
-                      Text(
-                        lift,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: liftColor,
-                          fontWeight: .w600,
+                    Row(
+                      mainAxisSize: .min,
+                      crossAxisAlignment: .baseline,
+                      textBaseline: .alphabetic,
+                      children: [
+                        Text(
+                          hasValue
+                              ? timed.value.toStringAsFixed(0)
+                              : '—',
+                          style: theme.textTheme.displayLarge?.copyWith(
+                            color: valueColor,
+                            fontWeight: .w600,
+                            height: 1.0,
+                          ),
+                          textAlign: .left,
                         ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '°',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: valueColor.withValues(alpha: 0.7),
+                          ),
+                          textAlign: .left,
+                        ),
+                        if (lift != null && hasValue) ...[
+                          const SizedBox(width: 12),
+                          Text(
+                            lift,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              color: liftColor,
+                              fontWeight: .w600,
+                            ),
+                            textAlign: .left,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      pinned
+                          ? 'Pinned reference'
+                          : 'Rolling ~12 min reference',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
                       ),
-                    ],
+                      textAlign: .left,
+                      maxLines: 1,
+                      overflow: .ellipsis,
+                    ),
                   ],
                 ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Row(
+                mainAxisSize: .min,
+                children: [
+                  Text(
+                    'TWD',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      letterSpacing: 1.1,
+                      fontWeight: .w600,
+                    ),
+                    textAlign: .right,
+                  ),
+                  IconButton(
+                    onPressed: onSetReference,
+                    tooltip: pinned
+                        ? 'Reference pinned — tap to re-pin now'
+                        : 'Set reference now',
+                    visualDensity: .compact,
+                    iconSize: 20,
+                    padding: .zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    icon: Icon(
+                      pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
